@@ -1,0 +1,19 @@
+sup!
+ya va!
+sup!
+ya va!
+sup!
+ya va!
+sup!
+ya va!
+sup!
+ya va!
+apunte.pdf
+clase.pdf
+enunciado.pdf
+hai
+hai64
+launch.c
+Makefile
+strace.txt
+t.txt
