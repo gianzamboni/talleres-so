@@ -9,10 +9,9 @@
 using namespace std;
 
 int counter = 0;
-
-pid_t child;
 int status;
 
+pid_t child;
 
 void increaseCounter(int signum){
 	counter++;
@@ -27,10 +26,8 @@ void waitChild(int signum){
 		}
 }
 
-
 int main(int argc, char* argv[]) {
 
-	
 	if (argc <= 1) {
 		fprintf(stderr, "Uso: %s commando [argumentos ...]\n", argv[0]);
 		exit(1);
@@ -38,7 +35,9 @@ int main(int argc, char* argv[]) {
 
 	/* Fork en dos procesos */
 	child = fork();
+	
 	if (child == -1) { perror("ERROR fork"); return 1; }
+
 	if (child == 0) { //Comportamiento del hijo
 		
 		signal(SIGURG, increaseCounter);
@@ -55,6 +54,7 @@ int main(int argc, char* argv[]) {
 		/* S'olo se ejecuta en el Padre */
 
 		signal(SIGINT, waitChild);
+
 		sigset_t emptySet;
 		sigemptyset(&emptySet);
 
@@ -67,13 +67,13 @@ int main(int argc, char* argv[]) {
 		tiempo.tv_nsec = 0;
 
 		timespec resto;
-		while(counter < 5){
 
+		while(counter < 5){
 			sigprocmask(SIG_BLOCK, &toBlock, 0);
 			signal(SIGCHLD, 0);
-			sigprocmask(SIG_BLOCK, &emptySet, 0);
+			sigprocmask(SIG_SETMASK, &emptySet, 0);
 			nanosleep(&tiempo, &resto);
-			fprintf(stderr, "sup!\n");
+			fprintf(stdout, "sup!\n");
 			kill(child, SIGURG);
 			counter ++;
 		}
