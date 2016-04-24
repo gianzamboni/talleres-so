@@ -28,7 +28,8 @@ int main(int argc, char* argv[]) {
 	} else {
 		/* S'olo se ejecuta en el Padre */
 		while(1) {
-			
+			if (waitpid(child, &status, 0) < 0) { perror("waitpid"); break; }
+			if (WIFEXITED(status)) break; /* Proceso terminado */			
 			int sys_no = ptrace(PTRACE_PEEKUSER, child, 8*ORIG_RAX, 0);
 			if(sys_no == SYS_kill) {
 				printf("Se ha hecho justicia\n");
