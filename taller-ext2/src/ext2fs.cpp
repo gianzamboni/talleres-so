@@ -280,6 +280,84 @@ unsigned int Ext2FS::blockaddr2sector(unsigned int block)
  */
 struct Ext2FSInode * Ext2FS::load_inode(unsigned int inode_number)
 {
+	/* Estructura fisica del file system (http://e2fsprogs.sourceforge.net/ext2intro.html)
+	   Ext2 esta compuesto por grupos de bloques. Y la estructura física puede ser representada de la 
+	   siguiente forma:
+	
+		+-------------------------------------------------------+ 
+		| Boot		| Block 	| Block 	|  ...	| Block 	|
+		| sector 	| group 1	| group 2   |  ... 	| group N 	|
+		+-------------------------------------------------------+ 
+		
+		Cada bloque contiene una copia redundante de información crucial para el control del file system 
+		(superbloque y filesystem descriptors) y, además, contiene una parte del filesystem (un bitmap de 
+		bloques, un bitma de inodes, una parte de la tabla de inodos y bloques de datos). La estructura de
+		un grupo de bloques es:
+
+		+-----------------------------------------------------------+ 
+		| Super	| FS 			| Block 	| Inode		| Data 		|
+		| Block | descriptors	| Bitmap 	| Bitmap 	| Blocks  	|
+		+-----------------------------------------------------------+ 
+		
+		En nuestro caso, (supongo por lo que estoy leyendo en el codigo :V) tenemos un array de 
+		Ext2FSSuperblock en la que la i-esmia entrada representa el superbloque del i-esimo grupo y 
+		una array de Ext2FSBlockGroupDescriptor donde cada entrada tiene el resto de la información 
+		del grupo.
+
+		Para poder cargar un inodo hay que realizar los siguiente pasos:
+		 	1. Encontrar el grupo de bloques que contiene la tabla que marca donde esta el inodo.
+		 		Esto lo hacemos con una función que nos dan ellos.
+		 	2. Una vez encontrado el grupo, necesitamos conseguir su descritpor
+		 		(que tiene toda la información que del grupo que no sea el superbloque.
+		 		Esto lo hacemos con otra función que nos dan ellos.
+		 	3. Del descriptor sacamos donde esta la tabla de inodos.
+		 	4. Nos fijamos el índice del inodo en dicha tabla.
+		 	5. Ahora falta conseguir el inodo propiamente dicho. La tabla puede llegar a ocupar más de un
+		 		bloque, entonces necesitamos leer el bloque que	tiene guardada la entrada de la tabla que
+		 		corresponde a nuestro inodo. Para esto calculamos cuantos inodos entran en un bloque. (El 
+		 		tamaño del inodo y el del bloque se encuentra en el superbloque)
+		 	6. Ahora que tenemos un bloque de entradas de la tabla, necesitamos calcular el indice del
+		 		inodo dentro de este bloque y copiarlo a la ram.
+
+	Using block groups is a big win in terms of reliability: since the control structures are replicated in 
+	each block group, it is easy to recover from a filesystem where the superblock has been corrupted.
+ 	This structure also helps to get good performances: by reducing the distance between 
+ 	the inode table and the data blocks, it is possible to reduce the disk head seeks during I/O on files.
+
+	In Ext2fs, directories are managed as linked lists of variable length entries. Each entry contains the inode number, the entry length, the file name and its length. By using variable length entries, it is possible to implement long file names without wasting disk space in directories. The structure of a directory entry is shown in this table:
+	inode number	entry length	name length	filename
+	As an example, The next table represents the structure of a directory containing three files: file1, long_file_name, and f2:
+	i1	16	05	file1
+	i2	40	14	long_file_name
+	i3	12	02	f2
+	*/
+
+	/*1*/
+	int inodeBlockGroup = blockgroup_for_inode(inode_number);
+	/*2*/
+	struct Ext2FSBlockGroupDescriptor* blockGroupDescriptor = block_group(inodeBlockGroup);
+	/*3*/
+	unsigned int inodesTable = blockGroupDescriptor->inode_table;
+	/*4*/
+	unsigned int inodeIndex = blockgroup_inode_index(inode_number);
+	/*5*/
+	struct Ext2FSSuperblock * superBlock = superblock();
+    int blockSize = 1024 << superBlock->log_block_size;
+	unsigned int inodeSize = superBlock->inode_size;
+    unsigned int inodesPerBlock = blockSize / inodeSize;
+    unsigned int tableBlock = inodeIndex / inodesPerBlock;
+
+    unsigned char* tableEntries = new unsigned char[inodesPerBlock];
+    read_block(inodesTable + tableBlock, (unsigned char*) tableEntries);
+    
+    /*6*/
+    unsigned int inodeBlockIndex = inodeIndex % inodesPerBlock;
+
+    struct Ext2FSInode * loadedNode = new struct Ext2FSInode;
+   	memcpy((void*) loadedNode, tableEntries + (inodeBlockIndex*inodeSize), sizeof(struct Ext2FSInode));
+
+   	delete[] tableEntries;
+   	return loadedNode;
 
 }
 
@@ -292,20 +370,28 @@ unsigned int Ext2FS::get_block_address(struct Ext2FSInode * inode, unsigned int 
 	if(block_number < 12) return inode->block[block_number]; //Directos, devuelvo la dirección de alguno de los bloques referenciados por el inodo
 
 	unsigned int* blockList = new unsigned int[block_pointers];
-	unsigned int blockIdx;
 	unsigned int blockAddress;
 
 	if(block_number < block_pointers + 12) {  // Simples
 		read_block(inode->block[12], (unsigned char*) blockList);
-		blockIdx = block_number - 12;
-		blockAddress = blockList[blockIdx];
+		unsigned int blockIdx1 = block_number - 12;
+		blockAddress = blockList[blockIdx1];
 	
-	} else if(block_number < block_pointers*(block_pointers+1) + 12) { // Doble
-		read_block(index->block[13], (unsigned char*) blockList); // Obtengo el bloque de direcciones a listas de punteros
-		blockIdx = (block_number - block_pointers - 12)/block_pointers; // Indice de la lista que corresponde al bloque buscado
-		read_block(blockList[blockIdx], (unsigned char*) blockList); //Obtengo la lista donde esta el puntero al bloque que quiero.
-		blockIdx = block_number - 12 - block_number*(blockIdx+1); //Indice del bloque en dicha lista
-		blockAddress = blockList[blockIdx];
+	} else if(block_number < block_pointers*(block_pointers+1) + 12) { // Dobles
+		read_block(inode->block[13], (unsigned char*) blockList); // Obtengo el bloque de direcciones a listas de punteros
+		unsigned int blockIdx1 = (block_number - (block_pointers + 12))/block_pointers; // Indice de la lista que corresponde al bloque buscado
+		read_block(blockList[blockIdx1], (unsigned char*) blockList); //Obtengo la lista donde esta el puntero al bloque que quiero.
+		unsigned int blockIdx2 = block_number - (block_pointers*(blockIdx1 + 1) + 12); //Indice del bloque en dicha lista
+		blockAddress = blockList[blockIdx2];
+
+	} else { // Triples
+		read_block(inode->block[14], (unsigned char*) blockList); // Obtengo el primer bloque
+		unsigned int blockIdx1 = (block_number - (block_pointers*(block_pointers+1) + 12))/(block_pointers*block_pointers*block_pointers); // Indice del puntero a la primer lista
+		read_block(inode->block[blockIdx1], (unsigned char*) blockList); // Obtengo el bloque de direcciones a listas de punteros
+		unsigned int blockIdx2 = (block_number - (block_pointers*(block_pointers*(blockIdx1 + 1) + 1) + 12))/(block_pointers*block_pointers); // Indice de la lista que corresponde al bloque buscado
+		read_block(blockList[blockIdx2], (unsigned char*) blockList); //Obtengo la lista donde esta el puntero al bloque que quiero.
+		unsigned int blockIdx3 = block_number - (block_pointers*(blockIdx2 + block_pointers*(blockIdx1 + 1) + 1) + 12); //Indice del bloque en dicha lista
+		blockAddress = blockList[blockIdx3];	
 	}
 
 	delete blockList;
