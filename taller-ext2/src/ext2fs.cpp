@@ -6,6 +6,9 @@
 #include <cstring>
 #include <iostream>
 
+
+// http://www.science.unitn.it/~fiorella/guidelinux/tlk/node94.html
+
 Ext2FS::Ext2FS(HDD & disk, unsigned char pnumber) : _hdd(disk), _partition_number(pnumber)
 {
 	assert(pnumber <= 3);
@@ -318,18 +321,6 @@ struct Ext2FSInode * Ext2FS::load_inode(unsigned int inode_number)
 		 		tamaño del inodo y el del bloque se encuentra en el superbloque)
 		 	6. Ahora que tenemos un bloque de entradas de la tabla, necesitamos calcular el indice del
 		 		inodo dentro de este bloque y copiarlo a la ram.
-
-	Using block groups is a big win in terms of reliability: since the control structures are replicated in 
-	each block group, it is easy to recover from a filesystem where the superblock has been corrupted.
- 	This structure also helps to get good performances: by reducing the distance between 
- 	the inode table and the data blocks, it is possible to reduce the disk head seeks during I/O on files.
-
-	In Ext2fs, directories are managed as linked lists of variable length entries. Each entry contains the inode number, the entry length, the file name and its length. By using variable length entries, it is possible to implement long file names without wasting disk space in directories. The structure of a directory entry is shown in this table:
-	inode number	entry length	name length	filename
-	As an example, The next table represents the structure of a directory containing three files: file1, long_file_name, and f2:
-	i1	16	05	file1
-	i2	40	14	long_file_name
-	i3	12	02	f2
 	*/
 
 	/*1*/
@@ -411,6 +402,9 @@ struct Ext2FSInode * Ext2FS::get_file_inode_from_dir_inode(struct Ext2FSInode * 
 	if(from == NULL)
 		from = load_inode(EXT2_RDIR_INODE_NUMBER);
 	//std::cerr << *from << std::endl;
+
+
+
 	assert(INODE_ISDIR(from));
 
 }
