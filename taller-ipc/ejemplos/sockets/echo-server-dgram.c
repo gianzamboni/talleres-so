@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
 	char 				buf[MAX_MSG_LENGTH];
 
 	/* Crear socket sobre el que se lee: dominio INET, protocolo UDP (DGRAM). */
-	socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+	socket_fd = socket(AF_UNIX, SOCK_DGRAM, 0);
 	if (socket_fd < 0) {
 		perror("Creating socket.");
 		exit(EXIT_FAILURE);

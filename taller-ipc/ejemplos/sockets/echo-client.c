@@ -1,39 +1,53 @@
-#include "header.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
+#define SOCK_PATH "echo_socket"
 
 int main(void)
 {
-    int                 socket_fd;
-    int                 len;
-    struct sockaddr_un  remote;
-    char                buf[MENSAJE_MAXIMO];
+    int s, t, len;
+    struct sockaddr_un remote;
+    char str[100];
 
-    /* Crear un socket de tipo UNIX con SOCK_STREAM */
-    if ((socket_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        perror("creando socket");
+    if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+        perror("socket");
         exit(1);
     }
 
-    /* Establecer la dirección a la cual conectarse. */
+    printf("Trying to connect...\n");
+
     remote.sun_family = AF_UNIX;
     strcpy(remote.sun_path, SOCK_PATH);
     len = strlen(remote.sun_path) + sizeof(remote.sun_family);
-
-    /* Conectarse. */
-    if (connect(socket_fd, (struct sockaddr *)&remote, len) == -1) {
-        perror("conectandose");
+    if (connect(s, (struct sockaddr *)&remote, len) == -1) {
+        perror("connect");
         exit(1);
     }
 
-    /* Establecer la dirección a la cual conectarse para escuchar. */
-    while(printf("> "), fgets(buf, MENSAJE_MAXIMO, stdin), !feof(stdin)) {
-        if (send(socket_fd, buf, strlen(buf), 0) == -1) {
-            perror("enviando");
+    printf("Connected.\n");
+
+    while(printf("> "), fgets(str, 100, stdin), !feof(stdin)) {
+        if (send(s, str, strlen(str), 0) == -1) {
+            perror("send");
+            exit(1);
+        }
+
+        if ((t=recv(s, str, 100, 0)) > 0) {
+            str[t] = '\0';
+            printf("echo> %s", str);
+        } else {
+            if (t < 0) perror("recv");
+            else printf("Server closed connection\n");
             exit(1);
         }
     }
 
-    /* Cerrar el socket. */
-    close(socket_fd);
+    close(s);
 
     return 0;
 }
