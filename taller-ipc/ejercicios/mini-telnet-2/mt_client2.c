@@ -1,7 +1,7 @@
 #include "mt.h"
 
 int main(int argc, char* argv[]) {
-    int                 socket_fd, read_size;
+    int                 socket_fd;
     struct sockaddr_in  remote;
     char                buf[MAX_MSG_LENGTH];
 
@@ -40,12 +40,12 @@ int main(int argc, char* argv[]) {
             perror("enviando");
             exit(1);
         }
-
         if(!strncmp(buf, END_STRING, MAX_MSG_LENGTH)) {
         	break;
         } else {
-        	read_size =  read(socket_fd, buf, MAX_MSG_LENGTH);
-        	printf("Recibido: %.*s\n", read_size, buf);
+        	memset(buf, 0, MAX_MSG_LENGTH);
+        	read(socket_fd, buf, MAX_MSG_LENGTH);
+        	printf("Recibido: %s\n", buf);
         }
     }
 
