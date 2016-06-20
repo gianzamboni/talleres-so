@@ -7,7 +7,7 @@
 #include <unistd.h>     /* exit, fork */
 
 #define FORN(c,n) for(int c = 0; c <= n; c++ )
-#define CHCKFORERROR(func, str) if(func < 0) {perror(str); exit(1);}
+#define CHCK_FOR_ERROR(func, str) if(func < 0) {perror(str); exit(1);}
 
 int run(char *program_name[], char **program_argv[], unsigned int count) {
 
@@ -15,23 +15,23 @@ int run(char *program_name[], char **program_argv[], unsigned int count) {
 	int pid;
 
 	FORN(i, count) {
-		CHCKFORERROR(pipe(pipes[i]), "creando pipes")
+		CHCK_FOR_ERROR(pipe(pipes[i]), "creando pipes")
 	}
 
 	FORN(i, count) {
-		CHCKFORERROR((pid = fork()), "creando hijos")
+		CHCK_FOR_ERROR((pid = fork()), "creando hijos")
 		
 		if(pid == 0) {
 			FORN(j, count){
 				// Solo voy a leer de mi pipe
-				if(j != i) CHCKFORERROR(close(pipes[j][0]), "closing reading pipes")
+				if(j != i) CHCK_FOR_ERROR(close(pipes[j][0]), "closing reading pipes")
 				// SOlo voy a escribir en el pipe del siguiente proceso
-				if(j != i + 1) CHCKFORERROR(close(pipes[j][1]), "closin writing pipes")
+				if(j != i + 1) CHCK_FOR_ERROR(close(pipes[j][1]), "closin writing pipes")
 			}
 
 			if(i == 0){
 				// Soy el primer hijo, no leo nisiquiera de mi pipe
-				CHCKFORERROR(close(pipes[i][0]), "closing my read-end pipe")
+				CHCK_FOR_ERROR(close(pipes[i][0]), "closing my read-end pipe")
 				dup2(pipes[i+1][1], 1); //redirigo mi stdout
 			} else if(i == count - 1) {
 				// Soy el último hijo, no mando mis resultados a nadie
@@ -48,8 +48,8 @@ int run(char *program_name[], char **program_argv[], unsigned int count) {
 	// Soy el padre, cierro todos los pipes, yo no los voy a usar
 	if(pid != 0) {
 		FORN(i, count){
-			CHCKFORERROR(close(pipes[i][0]), "closing pipes")
-			CHCKFORERROR(close(pipes[i][1]), "closing pipes")
+			CHCK_FOR_ERROR(close(pipes[i][0]), "closing pipes")
+			CHCK_FOR_ERROR(close(pipes[i][1]), "closing pipes")
 		}
 	}
 
